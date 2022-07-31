@@ -419,6 +419,31 @@ This is the method that load data from file located in the rousrces directory to
   }
 ```
 
+### Mapping from entity object to domain object
+Using `Jackson`
+```java
+  public static Route mapToDomain(RouteEntity entity) {
+    return new ObjectMapper().convertValue(entity, Route.class);
+  }
+```
+And from domain to entity
+```java
+  public static RouteEntity mapToEntity(Route route) {
+    return new ObjectMapper().convertValue(route, RouteEntity.class);
+  }
+```
+
+### Running services on Kubernetes
+To run services on kubernetes on my local I use this command when you are inside the quarkus project.
+```java
+mvn clean package -Dquarkus.kubernetes.deploy=true
+```
+
+And to undeploy just run:
+```java
+kubectl delete -f target/kubernetes/minikube.yaml
+```
+
 
 
 
