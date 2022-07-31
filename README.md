@@ -19,7 +19,20 @@ Testcontainers is a Java library that supports JUnit tests, providing lightweigh
 ## Project layout
 ![img-01]
 
+## Package layout
+![img-02]
+
+### Create Quarkus project using maven
+```java
+mvn io.quarkus:quarkus-maven-plugin:2.8.1.Final:create \
+ 	-DprojectGroupId=prajumsook \
+	-DprojectArtifactId=passenger-service \
+	-DclassName="org.wj.prajumsook.booking.resource.PassengerResource" \
+	-Dpath="/passengers"
+```
+
 
 
 
 [img-01]: media/img-01.png
+[img-02]: media/img-02.png
