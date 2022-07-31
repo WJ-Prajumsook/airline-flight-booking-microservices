@@ -102,6 +102,231 @@ public class RouteEntity {
 }
 ```
 
+### Defining repositories
+Ex:
+```java
+package org.wj.prajumsook.booking.repository;
+
+import javax.enterprise.context.ApplicationScoped;
+
+import org.wj.prajumsook.booking.entity.RouteEntity;
+
+import io.quarkus.hibernate.orm.panache.PanacheRepository;
+
+@ApplicationScoped
+public class RouteRepository implements PanacheRepository<RouteEntity> {
+}
+```
+
+### Defining domain-models
+Ex:
+```java
+package org.wj.prajumsook.booking.model;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import lombok.Data;
+import lombok.experimental.Accessors;
+
+@Data
+@Accessors(chain = true)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class Route {
+
+  private Long id;
+  private Airline airline;
+  private Airport sourceAirport;
+  private Airport destinationAirport;
+  private String codeshare;
+  private String stops;
+  private Airplane airplane;
+
+}
+```
+
+### Definning the services
+Ex:
+```java
+package org.wj.prajumsook.booking.service;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+import javax.transaction.Transactional;
+import javax.ws.rs.WebApplicationException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.wj.prajumsook.booking.entity.RouteEntity;
+import org.wj.prajumsook.booking.model.Route;
+import org.wj.prajumsook.booking.repository.RouteRepository;
+
+@ApplicationScoped
+@Transactional
+public class RouteService {
+
+  @Inject
+  RouteRepository routeRepository;
+  @Inject
+  AirportService airportService;
+  @Inject
+  AirlineService airlineService;
+  @Inject
+  AirplaneService airplaneService;
+
+  public Route findById(Long id) {
+    return routeRepository.findByIdOptional(id)
+        .map(r -> createResponse(r))
+        .orElseThrow(() -> new WebApplicationException("Route id: " + id + " not found", 404));
+  }
+
+  private Route createResponse(RouteEntity entity) {
+    Route route = mapToDomain(entity);
+    route.setAirline(airlineService.findById(entity.getAirlineId()));
+    route.setSourceAirport(airportService.findById(entity.getSourceAirportId()));
+    route.setDestinationAirport(airportService.findById(entity.getDestinationAirportId()));
+    if (entity.getAirplaneCode() != null) {
+      route.setAirplane(airplaneService.findByIATA(entity.getAirplaneCode()));
+    }
+    return route;
+  }
+
+  public static Route mapToDomain(RouteEntity entity) {
+    return new ObjectMapper().convertValue(entity, Route.class);
+  }
+
+  public static RouteEntity mapToEntity(Route route) {
+    return new ObjectMapper().convertValue(route, RouteEntity.class);
+  }
+}
+```
+
+### JAX-RS resources
+Ex:
+```java
+package org.wj.prajumsook.booking.resource;
+
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.jboss.resteasy.reactive.RestPath;
+import org.wj.prajumsook.booking.model.Route;
+import org.wj.prajumsook.booking.service.RouteService;
+
+@Path("/routes/v1")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class RouteResource {
+
+  @Inject
+  RouteService routeService;
+
+  @GET
+  @Path("/{id}")
+  public Route findById(@RestPath Long id) {
+    return routeService.findById(id);
+  }
+
+  @GET
+  @Path("/init")
+  public Response initData() {
+    routeService.initData();
+    return Response.status(Response.Status.CREATED).build();
+  }
+
+}
+```
+
+### Identifies the application path
+```java
+package org.wj.prajumsook.booking;
+
+import javax.ws.rs.ApplicationPath;
+import javax.ws.rs.core.Application;
+
+@ApplicationPath("/api")
+public class RouteServiceApplication extends Application {
+}
+```
+
+### JAX-RS exception mapper provider
+EX:
+```java
+package org.wj.prajumsook.booking.service;
+
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.ext.ExceptionMapper;
+import javax.ws.rs.ext.Provider;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+@Provider
+public class ErrorMapper implements ExceptionMapper<Exception> {
+
+  @Override
+  public Response toResponse(Exception ex) {
+    int statusCode = Response.Status.BAD_REQUEST.getStatusCode();
+    if (ex instanceof WebApplicationException) {
+      statusCode = ((WebApplicationException) ex).getResponse().getStatus();
+    }
+
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode error = mapper.createObjectNode();
+    error.put("exceptionType", ex.getClass().getName());
+    error.put("statusCode", statusCode);
+    error.put("error", (ex.getMessage() != null) ? ex.getMessage() : "unknown error");
+
+    return Response.status(statusCode).entity(error).build();
+  }
+}
+```
+
+### Test container resource
+```java
+package org.wj.prajumsook.booking.resource;
+
+import java.util.Collections;
+import java.util.Map;
+
+import org.testcontainers.containers.PostgreSQLContainer;
+
+import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+
+public class TestContainerResource implements QuarkusTestResourceLifecycleManager {
+
+  private static final PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:13")
+      .withDatabaseName("route_db")
+      .withUsername("quarkus_user")
+      .withPassword("quarkus_pass");
+
+  @Override
+  public Map<String, String> start() {
+    db.start();
+    return Collections.singletonMap("quarkus.datasource.jdbc.url", db.getJdbcUrl());
+  }
+
+  @Override
+  public void stop() {
+    db.stop();
+  }
+}
+```
+
+
+
+
 
 
 [img-01]: media/img-01.png
