@@ -324,7 +324,100 @@ public class TestContainerResource implements QuarkusTestResourceLifecycleManage
 }
 ```
 
+### JUnit test
+```java
+package org.wj.prajumsook.booking.resource;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+import org.wj.prajumsook.booking.model.Airport;
+import org.wj.prajumsook.booking.model.Country;
+
+import io.quarkus.test.common.QuarkusTestResource;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.containsString;
+
+@QuarkusTest
+@QuarkusTestResource(TestContainerResource.class)
+public class AirportResourceTest {
+
+  @Test
+  public void testCreateAndFind() {
+
+    Country country = given().when()
+        .contentType(ContentType.JSON)
+        .body(
+            new Country()
+                .setName("Greece")
+                .setIsoCode("GR")
+                .setDafifCode("GR"))
+        .post("/api/countries/v1")
+        .then()
+        .statusCode(200).extract().as(Country.class);
+
+    Airport airport = given().when()
+        .contentType(ContentType.JSON)
+        .body(
+            new Airport()
+                .setAirportId(1456L)
+                .setAltitude("26")
+                .setCountry(country)
+                .setDst("E")
+                .setIata("KLX")
+                .setIcao("LGKL")
+                .setLatitude("37.06829833984375")
+                .setLongitude("22.02549934387207")
+                .setName("Kalamata Airport")
+                .setSource("OurAirports")
+                .setTimezone("2")
+                .setType("airport")
+                .setTzDatabase("Europe/Athens"))
+        .post("/api/airports/v1")
+        .then()
+        .body(containsString("Kalamata Airport"))
+        .statusCode(200).extract().as(Airport.class);
+
+    assertEquals("KLX", airport.getIata());
+  }
+
+}
+```
+
+### Loading data from file
+This is the method that load data from file located in the rousrces directory to database.
+
+```java
+  public void initData() {
+    Pattern pattern = Pattern.compile(",");
+    try {
+      InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream("route.dat");
+      Stream<String> lines = new BufferedReader(new InputStreamReader(in)).lines();
+      lines.forEach(line -> {
+        String[] item = pattern.split(line);
+        RouteEntity entity = new RouteEntity()
+            .setAirlineICAO(item[0])
+            .setAirlineId(Long.parseLong(item[1]))
+            .setSourceAirportIATA(item[2])
+            .setSourceAirportId(Long.parseLong(item[3]))
+            .setDestinationAirportIATA(item[4])
+            .setDestinationAirportId(Long.parseLong(item[5]))
+            .setCodeshare(item[6])
+            .setStops(item[7]);
+        if (item.length > 8) {
+          entity.setAirplaneCode(item[8]);
+        }
+        routeRepository.persist(entity);
+      });
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      throw new WebApplicationException(ex.getMessage(), 500);
+    }
+  }
+```
 
 
 
