@@ -31,8 +31,32 @@ mvn io.quarkus:quarkus-maven-plugin:2.8.1.Final:create \
 	-Dpath="/passengers"
 ```
 
+### Add dependencies to the project
+To add Kubernetes, jib minikube and flyway dependencies I use this maven command.
 
+```java
+mvn quarkus:add-extension -Dextensions="kubernetes,jib,minikube,flyway"
+```
 
+To add hibernate-orm-panache, postgresql and openapi I use thid maven command.
+
+```java
+mvn quarkus:add-extension -Dextensions="hibernate-orm-panache,jdbc-postgresql,smallrye-openapi"
+```
+
+### Configure datasource
+Add configuration settings properties in `application.properties` file.
+
+```java
+quarkus.datasource.db-kind=postgresql
+quarkus.datasource.username=quarkus_user
+quarkus.datasource.password=quarkus_pass
+quarkus.datasource.jdbc.url=jdbc:postgresql://192.168.64.13:30831/route_db
+
+quarkus.hibernate-orm.database.generation=update
+
+%test.quarkus.flyway.migrate-at-start=true
+```
 
 [img-01]: media/img-01.png
 [img-02]: media/img-02.png
